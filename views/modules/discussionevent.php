@@ -8,7 +8,7 @@ if (!function_exists('PanelHeading')) {
 }
 
 if (!function_exists('WriteDiscussionEvent')) {
-	function WriteDiscussionEvent($Discussion, $Prefix) {
+	function WriteDiscussionEvent($Discussion, $Prefix = null) {
 	?>
 	<li class="<?php echo CssClass($Discussion); ?>">
 		<div class="Title">

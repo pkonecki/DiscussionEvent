@@ -17,6 +17,7 @@ $PluginInfo['DiscussionEvent'] = array(
 class DiscussionEventPlugin extends Gdn_Plugin {
 	public static $ApplicationFolder = 'plugins/DiscussionEvent';
 	
+	public $Form;
 	public function __construct($Sender='') {
 		parent::__construct($Sender, self::$ApplicationFolder);
 	}
@@ -104,11 +105,74 @@ class DiscussionEventPlugin extends Gdn_Plugin {
 		$EventDate = $Sender->EventArguments['Discussion']->DiscussionEventDate;
 		self::displayEventDate($EventDate);
 	}
+
+	public function DiscussionController_afterDiscussionBody_handler($Sender) {
+		$Discussion = $Sender->EventArguments['Discussion'];
+		$EventDate = $Sender->EventArguments['Discussion']->DiscussionEventDate;
+		if ($EventDate){
+			$Guests = $Discussion->DiscussionEventGuests;
+			if ($Guests)
+				$Guests = json_decode($Guests, true);
+			$DiscussionModel = new DiscussionModel();
+			$Session = Gdn::Session();
+			if ($Session->isValid())
+				$UserId = $Session->User->UserID;
+			else
+				$UserId = false;
 	
+			if (!$this->Form)
+				$this->Form = new Gdn_Form();
+	
+			if ($this->Form->authenticatedPostBack()) {
+				$Data = $this->Form->FormValues();
+				if ($Data['Type'] == 'Subscribe')
+				{
+					if (!$Guests)
+						$Guests = array();
+					if (!array_key_exists($UserId,$Guests) && array_key_exists('Remark',$Data)) {
+						$Guests[$UserId] = $Data['Remark'];
+						$DiscussionModel->SetProperty($Discussion->DiscussionID, 'DiscussionEventGuests', json_encode($Guests));
+					}
+				}
+				else if ($Data['Type'] == 'Unsubscribe')
+				{
+					if (array_key_exists($UserId,$Guests)) {
+						unset($Guests[$UserId]);
+						$DiscussionModel->SetProperty($Discussion->DiscussionID, 'DiscussionEventGuests', json_encode($Guests));
+					}
+				}
+			}
+	
+			self::displayEventGuests($Guests);
+			echo $this->Form->Open();
+			echo $this->Form->Errors();
+	
+			if ($UserId) {
+				if (!$Guests || !array_key_exists($UserId,$Guests) )
+				{
+					$this->Form->AddHidden('Type', 'Subscribe', true);
+					echo $Sender->Form->label(t('Remark'), 'DiscussionEventRemark'), ' ';
+					echo $this->Form->TextBox('Remark');
+					echo $this->Form->getHidden();
+					echo $this->Form->Close(t('Subscribe'));
+				}
+				else
+				{
+					$this->Form->AddHidden('Type', 'Unsubscribe', true);
+					echo $this->Form->getHidden();
+					echo $this->Form->Close(t('Unsubscribe'));
+				}
+			}
+		}
+	}
+
 	public function structure() {
 		$Structure = Gdn::structure();
 		$Structure->table('Discussion')
 			->column('DiscussionEventDate', 'date', true, 'index')
+			->set();
+		$Structure->table('Discussion')
+			->column('DiscussionEventGuests', 'varchar(1000)', true, 'index')
 			->set();
 	}
 	
@@ -133,6 +197,21 @@ class DiscussionEventPlugin extends Gdn_Plugin {
 	public static function displayEventDate($EventDate) {
 		if ($EventDate) {
 			echo '<div class="DiscussionEventDate icon icon-calendar"> '.Gdn_Format::date($EventDate, 'html').'</div>';
+		}
+	}
+
+	public static function displayEventGuests($EventGuests) {
+		if ($EventGuests) {
+			echo '<br/>';
+			echo Wrap(t('Guests List'), 'h4', '');
+			echo '<ul class="DiscussionEvent GuestList">';
+			foreach($EventGuests as $GuestID => $Remark)
+			{
+				//$Name = 'moi';
+				$Name = Gdn::UserModel()->GetID($GuestID)->Name;
+				echo '<li>'.$Name.' - '.$Remark.'</li>';
+			}
+			echo '</ul><br/>';
 		}
 	}
 }
